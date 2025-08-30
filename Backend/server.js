@@ -1,4 +1,4 @@
-// server.js
+// server.js — StealthText API
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -46,29 +46,15 @@ function signToken(payload) {
 function auth(req, res, next) {
   const hdr = req.headers.authorization || '';
   const token = hdr.startsWith('Bearer ') ? hdr.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  if (!token) return res.status(401).json({ error: 'Non authentifié' });
   try {
     req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch {
-    return res.status(401).json({ error: 'Invalid token' });
+    return res.status(401).json({ error: 'Token invalide' });
   }
 }
 const todayISO = () => new Date().toISOString().slice(0,10);
-const jwt = require("jsonwebtoken");
-
-// --- middleware simple pour vérifier le token
-function auth(req, res, next) {
-  const h = req.headers.authorization || "";
-  const token = h.startsWith("Bearer ") ? h.slice(7) : null;
-  if (!token) return res.status(401).json({ error: "Non authentifié" });
-  try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
-    next();
-  } catch {
-    return res.status(401).json({ error: "Token invalide" });
-  }
-}
 
 // --- route d’activation Premium
 app.post("/api/premium/activate", auth, (req, res, next) => {
@@ -120,7 +106,7 @@ app.post('/api/auth/login', (req, res) => {
     if (err) return res.status(500).json({ error: 'Erreur serveur' });
     if (!row) return res.status(401).json({ error: 'Email ou mot de passe invalide' });
     if (!bcrypt.compareSync(password, row.password_hash)) return res.status(401).json({ error: 'Email ou mot de passe invalide' });
-    const token = signToken({ id: row.id, email: row.email });
+    const token = signToken({ id: row.id, email: row.email, premium: !!row.premium });
     res.json({ token, user: { id: row.id, email: row.email, premium: !!row.premium } });
   });
 });
@@ -147,14 +133,12 @@ app.post('/api/convert', auth, (req, res) => {
       if (text.length > FREE_CHAR_LIMIT) {
         return res.status(403).json({ error: `Limite gratuite : ${FREE_CHAR_LIMIT} caractères par conversion.` });
       }
-      // fetch compteur
       db.get(`SELECT count FROM usage_daily WHERE user_id = ? AND day = ?`, [req.user.id, day], (err2, row2) => {
         if (err2) return res.status(500).json({ error: 'Erreur serveur' });
         const used = row2 ? row2.count : 0;
         if (used >= FREE_CONVERSION_LIMIT) {
           return res.status(403).json({ error: `Vous avez atteint vos ${FREE_CONVERSION_LIMIT} essais gratuits aujourd’hui.` });
         }
-        // increment + convert
         const next = used + 1;
         db.run(`INSERT INTO usage_daily(user_id, day, count) VALUES(?,?,?)
                 ON CONFLICT(user_id, day) DO UPDATE SET count = excluded.count`,
@@ -171,13 +155,11 @@ app.post('/api/convert', auth, (req, res) => {
   });
 });
 
-// --- Stripe webhook (stub) : à activer quand tu as Stripe
+// --- Stripe webhook (stub)
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => {
-  // TODO: vérifier la signature Stripe ici puis:
-  // const email = ...; db.run('UPDATE users SET premium = 1 WHERE email = ?', [email])
   res.sendStatus(200);
 });
 
 // --- Start
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`✅ API running on port ${PORT}`));
