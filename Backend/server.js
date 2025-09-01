@@ -159,7 +159,15 @@ app.post('/api/convert', auth, (req, res) => {
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   res.sendStatus(200);
 });
+// --- Health & root
+app.get("/", (req, res) => {
+  res.send("OK");
+});
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true });
+});
 
 // --- Start
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`✅ API running on port ${PORT}`));
+
